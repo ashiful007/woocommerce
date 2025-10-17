@@ -14,6 +14,8 @@ use Automattic\WooCommerce\Enums\ProductTaxStatus;
 use Automattic\WooCommerce\Enums\ProductType;
 use Automattic\WooCommerce\Enums\CatalogVisibility;
 use Automattic\WooCommerce\Internal\CostOfGoodsSold\CogsAwareRestControllerTrait;
+use Automattic\WooCommerce\Internal\Traits\RestApiCache;
+use Automattic\WooCommerce\Internal\Utilities\ProductUtil;
 use Automattic\WooCommerce\Utilities\I18nUtil;
 
 defined( 'ABSPATH' ) || exit;
@@ -27,6 +29,7 @@ defined( 'ABSPATH' ) || exit;
 class WC_REST_Products_Controller extends WC_REST_Products_V2_Controller {
 
 	use CogsAwareRestControllerTrait;
+	use RestApiCache;
 
 	/**
 	 * Endpoint namespace.
@@ -80,6 +83,14 @@ class WC_REST_Products_Controller extends WC_REST_Products_V2_Controller {
 	 * @var array
 	 */
 	private $processed_attachment_ids_for_request = array();
+
+	/**
+	 * Creates a new instance of the class.
+	 */
+	public function __construct() {
+		parent::__construct();
+		$this->initialize_output_caching();
+	}
 
 	/**
 	 * Register the routes for products.
@@ -2148,5 +2159,50 @@ class WC_REST_Products_Controller extends WC_REST_Products_V2_Controller {
 		$this->processed_attachment_ids_for_request = array();
 
 		return $response;
+	}
+
+	/**
+	 * Get the default entity type for version caching.
+	 * See the RestApiCache trait.
+	 *
+	 * @return string|null Entity type.
+	 */
+	protected function get_default_entity_type(): ?string {
+		return 'product';
+	}
+
+	/**
+	 * Get the names of the filters that can modify the endpoint responses.
+	 * See the RestApiCache trait.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return array Array of filter names.
+	 */
+	protected function get_cache_hash_filters( WP_REST_Request $request ): array {
+		return array(
+			'woocommerce_rest_prepare_product_object',
+			'woocommerce_rest_product_object_query',
+		);
+	}
+
+	/**
+	 * Get data for ETag generation.
+	 * See the RestApiCache trait.
+	 *
+	 * @param array $data Response data.
+	 * @return array Cleaned data for ETag generation.
+	 */
+	protected function get_data_for_etag( array $data ): array {
+		if ( isset( $data[0] ) ) {
+			foreach ( $data as $product ) {
+				if ( isset( $product['related_ids'] ) ) {
+					unset( $product['related_ids'] );
+				}
+			}
+		} elseif ( isset( $data['related_ids'] ) ) {
+			unset( $data['related_ids'] );
+		}
+
+		return $data;
 	}
 }
